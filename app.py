@@ -20,15 +20,12 @@ try:
     if len(loaded_data) == 4:
         model, scaler, label_encoders, target_encoder = loaded_data
         st.sidebar.success("✅ Model Loaded Successfully!")
-    elif len(loaded_data) == 3:
-        model, label_encoders, target_encoder = loaded_data
-        scaler = None
-        st.sidebar.warning("⚠️ Scaler not found in model file")
-    else:
+    
+    elif:
         st.error(f"❌ Unexpected number of objects in pickle file: {len(loaded_data)}")
         st.stop()
     
-    # Display debug info in sidebar
+#     # Display debug info in sidebar
     with st.sidebar:
         st.write("**Model Performance:**")
         st.metric("Accuracy", "84.55%")
@@ -88,7 +85,7 @@ with st.form("loan_application"):
     with col4:
         st.subheader("Loan Details")
         loan_amount = st.number_input("Loan Amount ($)", min_value=0, value=150, step=10)
-        loan_amount_term = st.number_input("Loan Term (months)", min_value=0, value=360, step=12)
+        loan_amount_term = st.number_input("Loan Term (months)", min_value=0, value=24, step=12)
     
     submitted = st.form_submit_button("🚀 Predict Loan Approval", use_container_width=True)
 
@@ -363,3 +360,4 @@ with st.sidebar:
     st.markdown("- **Confidence**: ≥70% required")
     st.markdown("- **Credit History**: Must be good")
     st.markdown("- **Final Decision**: Based on all criteria")
+
