@@ -1,4 +1,4 @@
-# app.py - FIXED VERSION with proper column order and employment mapping
+# app.py - UPDATED VERSION with confidence level and credit history rules
 import streamlit as st
 import pickle
 import pandas as pd
@@ -16,16 +16,16 @@ try:
     with open("loan_prediction.pkl", "rb") as f:
         model, scaler, label_encoders, target_encoder = pickle.load(f)
     
-    # Display debug info in sidebar
-    with st.sidebar:
-        st.success("✅ Model Loaded Successfully!")
-        st.write("**Model Performance:**")
-        st.metric("Accuracy", "84.55%")
-        st.write("**Available Encoders:**", list(label_encoders.keys()))
+#     # Display debug info in sidebar
+#     with st.sidebar:
+#         st.success("✅ Model Loaded Successfully!")
+#         st.write("**Model Performance:**")
+#         st.metric("Accuracy", "84.55%")
+#         st.write("**Features:**", 11)
         
-except Exception as e:
-    st.error(f"❌ Error loading model: {str(e)}")
-    st.stop()
+# except Exception as e:
+#     st.error(f"❌ Error loading model: {str(e)}")
+#     st.stop()
 
 st.title("🏦 Loan Approval Prediction App")
 st.markdown("Predict whether a loan application will be approved based on applicant information")
@@ -124,12 +124,6 @@ if submitted:
                     st.error(f"❌ Encoding error for {column}: '{original_value}' not in {list(label_encoders[column].classes_)}")
                     st.stop()
         
-        # Display encoded data for debugging
-        with st.expander("🔍 Encoded Data (Debug)"):
-            st.write("**Encoded Values:**")
-            st.dataframe(encoded_df, use_container_width=True)
-            st.write("**Column Order:**", list(encoded_df.columns))
-        
         # Scale features
         input_scaled = scaler.transform(encoded_df)
         
@@ -141,24 +135,56 @@ if submitted:
         result = target_encoder.inverse_transform(prediction)
         probability = prediction_proba[0][prediction[0]]
         
+        # NEW: Apply business rules
+        final_decision = result[0]
+        confidence_threshold = 0.70  # 70% confidence threshold
+        credit_history_bad = credit_history == 0.0
+        
+        # Rule 1: Reject if confidence level is below 70%
+        if probability < confidence_threshold:
+            final_decision = 'N'
+            rejection_reason = f"Confidence level ({probability:.2%}) below required threshold ({confidence_threshold:.0%})"
+        
+        # Rule 2: Reject if confidence above 70% but credit history is bad
+        elif probability >= confidence_threshold and credit_history_bad:
+            final_decision = 'N'
+            rejection_reason = "Credit history is poor despite high confidence"
+        
+        else:
+            rejection_reason = None
+        
         # Display results
         st.header("🎯 Prediction Results")
         
         result_col, prob_col = st.columns(2)
         
         with result_col:
-            if result[0] == 'Y':
+            if final_decision == 'Y':
                 st.success(f"## ✅ Loan Approved!")
                 st.balloons()
             else:
                 st.error(f"## ❌ Loan Not Approved")
+                if rejection_reason:
+                    st.warning(f"**Reason:** {rejection_reason}")
         
         with prob_col:
             confidence_level = "High" if probability > 0.7 else "Medium" if probability > 0.5 else "Low"
+            status_color = "normal"
+            
+            # Color code based on final decision
+            if final_decision == 'Y':
+                status_color = "normal"
+            else:
+                if probability < confidence_threshold:
+                    status_color = "off"
+                else:
+                    status_color = "inverse"
+            
             st.metric(
                 label="Confidence Level",
                 value=f"{probability:.2%}",
-                delta=confidence_level
+                delta=confidence_level,
+                delta_color=status_color
             )
         
         # Show detailed probabilities
@@ -171,6 +197,27 @@ if submitted:
         st.dataframe(prob_df.style.format({'Probability': '{:.2%}'}).hide(axis='index'), 
                     use_container_width=True)
         
+        # Show business rules applied
+        st.subheader("📋 Business Rules Applied")
+        rules_df = pd.DataFrame({
+            'Rule': [
+                'Confidence Threshold (70%)',
+                'Credit History Check',
+                'Final Decision'
+            ],
+            'Status': [
+                f"{'✅ Met' if probability >= confidence_threshold else '❌ Not Met'} ({probability:.2%})",
+                f"{'✅ Good' if not credit_history_bad else '❌ Poor'}",
+                f"{'✅ Approved' if final_decision == 'Y' else '❌ Rejected'}"
+            ],
+            'Description': [
+                f"Model confidence must be ≥ {confidence_threshold:.0%}",
+                "Credit history must be good for approval",
+                "Based on all rules and model prediction"
+            ]
+        })
+        st.dataframe(rules_df, use_container_width=True)
+        
         # Show feature importance
         st.subheader("📈 Feature Importance")
         feature_importance = pd.DataFrame({
@@ -182,22 +229,38 @@ if submitted:
         
         # Interpretation
         st.subheader("💡 Interpretation")
-        if result[0] == 'Y':
+        if final_decision == 'Y':
             st.info(f"""
-            **Factors that likely contributed to approval:**
+            **Factors that contributed to approval:**
             - Good credit history
             - {'Stable salaried employment' if employment_type == 'Salaried' else 'Self-employed business'}
             - Favorable property area
             - Strong financial profile
+            - High confidence level ({probability:.2%})
             """)
         else:
-            st.info(f"""
-            **Factors that may need improvement:**
-            - Consider improving credit history
-            - {'Provide additional employment documentation' if employment_type == 'Salaried' else 'Provide business financial statements'}
-            - Adjust loan amount relative to income
-            - Increase income stability
-            """)
+            if probability < confidence_threshold:
+                st.info(f"""
+                **Reasons for rejection:**
+                - Confidence level ({probability:.2%}) below required threshold ({confidence_threshold:.0%})
+                - Model prediction is not sufficiently certain
+                - Consider providing additional documentation
+                """)
+            elif credit_history_bad:
+                st.info(f"""
+                **Reasons for rejection:**
+                - Poor credit history (automatic rejection)
+                - Despite high model confidence ({probability:.2%})
+                - Improve credit score before reapplying
+                """)
+            else:
+                st.info(f"""
+                **Factors that may need improvement:**
+                - Consider improving credit history
+                - {'Provide additional employment documentation' if employment_type == 'Salaried' else 'Provide business financial statements'}
+                - Adjust loan amount relative to income
+                - Increase income stability
+                """)
             
     except Exception as e:
         st.error(f"❌ Error making prediction: {str(e)}")
@@ -223,5 +286,10 @@ with st.sidebar:
     st.markdown("- **Training Data**: 480 records")
     st.markdown("- **Features**: 11 variables")
     st.markdown("- **Accuracy**: 84.55%")
-  
+    
+    st.markdown("### 🛡️ Business Rules:")
+    st.markdown("- **Confidence**: ≥70% required")
+    st.markdown("- **Credit History**: Must be good")
+    st.markdown("- **Final Decision**: Based on all criteria")
+
 
