@@ -1,4 +1,4 @@
-# app.py - UPDATED VERSION with confidence level and credit history rules
+# app.py 
 import streamlit as st
 import pickle
 import pandas as pd
@@ -11,6 +11,33 @@ st.set_page_config(
     layout="wide"
 )
 
+# Load the trained model with better error handling
+try:
+    with open("loan_prediction.pkl", "rb") as f:
+        loaded_data = pickle.load(f)
+    
+    # Handle different possible structures in the pickle file
+    if len(loaded_data) == 4:
+        model, scaler, label_encoders, target_encoder = loaded_data
+        st.sidebar.success("✅ Model Loaded Successfully!")
+    elif len(loaded_data) == 3:
+        model, label_encoders, target_encoder = loaded_data
+        scaler = None
+        st.sidebar.warning("⚠️ Scaler not found in model file")
+    else:
+        st.error(f"❌ Unexpected number of objects in pickle file: {len(loaded_data)}")
+        st.stop()
+    
+    # Display debug info in sidebar
+    with st.sidebar:
+        st.write("**Model Performance:**")
+        st.metric("Accuracy", "84.55%")
+        st.write("**Features:**", 11)
+        st.write("**Scaler Available:**", "Yes" if scaler is not None else "No")
+        
+except Exception as e:
+    st.error(f"❌ Error loading model: {str(e)}")
+    st.stop()
 
 st.title("🏦 Loan Approval Prediction App")
 st.markdown("Predict whether a loan application will be approved based on applicant information")
@@ -30,7 +57,6 @@ with st.form("loan_application"):
         
     with col2:
         st.subheader("Employment & Property")
-        # Keep the employment type mapping
         employment_type = st.selectbox(
             "Employment Type", 
             ["Salaried", "Self Employed"],
@@ -85,14 +111,9 @@ if submitted:
         st.write(f"**Employment Type:** {employment_type} → Self_Employed: {self_employed_value}")
         
     try:
-        # FIX: Get the correct feature names and enforce column order
-        if hasattr(scaler, 'feature_names_in_'):
-            # Use scaler's feature names (most accurate)
-            expected_columns = list(scaler.feature_names_in_)
-        else:
-            # Fallback: use label_encoders order + numerical columns
-            numerical_columns = ['ApplicantIncome', 'CoapplicantIncome', 'LoanAmount', 'Loan_Amount_Term', 'Credit_History']
-            expected_columns = list(label_encoders.keys()) + numerical_columns
+        # Determine expected columns
+        numerical_columns = ['ApplicantIncome', 'CoapplicantIncome', 'LoanAmount', 'Loan_Amount_Term', 'Credit_History']
+        expected_columns = list(label_encoders.keys()) + numerical_columns
         
         # Reorder input dataframe to match training data order
         input_df_ordered = input_df[expected_columns].copy()
@@ -109,8 +130,13 @@ if submitted:
                     st.error(f"❌ Encoding error for {column}: '{original_value}' not in {list(label_encoders[column].classes_)}")
                     st.stop()
         
-        # Scale features
-        input_scaled = scaler.transform(encoded_df)
+        # Scale features if scaler is available
+        if scaler is not None:
+            input_scaled = scaler.transform(encoded_df)
+        else:
+            # If no scaler, use the encoded data directly (with warning)
+            input_scaled = encoded_df.values
+            st.warning("⚠️ Using unscaled features (scaler not available)")
         
         # Make prediction
         prediction = model.predict(input_scaled)
@@ -120,7 +146,7 @@ if submitted:
         result = target_encoder.inverse_transform(prediction)
         probability = prediction_proba[0][prediction[0]]
         
-        # NEW: Apply business rules
+        # Apply business rules
         final_decision = result[0]
         confidence_threshold = 0.70  # 70% confidence threshold
         credit_history_bad = credit_history == 0.0
@@ -204,13 +230,14 @@ if submitted:
         st.dataframe(rules_df, use_container_width=True)
         
         # Show feature importance
-        st.subheader("📈 Feature Importance")
-        feature_importance = pd.DataFrame({
-            'Feature': encoded_df.columns,
-            'Importance': model.feature_importances_
-        }).sort_values('Importance', ascending=False)
-        
-        st.dataframe(feature_importance, use_container_width=True)
+        if hasattr(model, 'feature_importances_'):
+            st.subheader("📈 Feature Importance")
+            feature_importance = pd.DataFrame({
+                'Feature': encoded_df.columns,
+                'Importance': model.feature_importances_
+            }).sort_values('Importance', ascending=False)
+            
+            st.dataframe(feature_importance, use_container_width=True)
         
         # Interpretation
         st.subheader("💡 Interpretation")
@@ -249,12 +276,18 @@ if submitted:
             
     except Exception as e:
         st.error(f"❌ Error making prediction: {str(e)}")
-        st.info("""
-        **Troubleshooting tips:**
-        - Make sure all fields are filled correctly
-        - The model only accepts specific values for each field
-        - Check that your inputs match the training data format
-        """)
+        
+        # Enhanced debugging information
+        with st.expander("🔧 Debug Information"):
+            st.write("**Available objects:**")
+            st.write(f"- Model: {type(model) if 'model' in locals() else 'Not defined'}")
+            st.write(f"- Scaler: {type(scaler) if 'scaler' in locals() else 'Not defined'}")
+            st.write(f"- Label Encoders: {list(label_encoders.keys()) if 'label_encoders' in locals() else 'Not defined'}")
+            st.write(f"- Target Encoder: {type(target_encoder) if 'target_encoder' in locals() else 'Not defined'}")
+            
+            if 'encoded_df' in locals():
+                st.write("**Encoded DataFrame:**")
+                st.dataframe(encoded_df)
 
 # Add help section in sidebar
 with st.sidebar:
@@ -276,6 +309,5 @@ with st.sidebar:
     st.markdown("- **Confidence**: ≥70% required")
     st.markdown("- **Credit History**: Must be good")
     st.markdown("- **Final Decision**: Based on all criteria")
-
 
 
