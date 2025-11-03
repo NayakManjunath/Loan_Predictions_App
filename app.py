@@ -1,4 +1,4 @@
-# app.py 
+# app.py - FIXED VERSION with proper column order and employment mapping
 import streamlit as st
 import pickle
 import pandas as pd
@@ -23,12 +23,6 @@ try:
         st.metric("Accuracy", "84.55%")
         st.write("**Available Encoders:**", list(label_encoders.keys()))
         
-        # Show encoding mappings for debugging
-        with st.expander("🔍 Model Encoding Info"):
-            for col, encoder in label_encoders.items():
-                st.write(f"**{col}:** {dict(zip(encoder.classes_, range(len(encoder.classes_))))}")
-            st.write(f"**Target:** {dict(zip(target_encoder.classes_, range(len(target_encoder.classes_))))}")
-        
 except Exception as e:
     st.error(f"❌ Error loading model: {str(e)}")
     st.stop()
@@ -46,30 +40,20 @@ with st.form("loan_application"):
         st.subheader("Personal Details")
         gender = st.selectbox("Gender", ["Male", "Female"])
         married = st.selectbox("Married", ["Yes", "No"])
-        
-        # FIX: Check what education options the model was trained on
-        education_options = list(label_encoders['Education'].classes_) if 'Education' in label_encoders else ["Graduate", "Not Graduate"]
-        education = st.selectbox("Education", education_options)
-        
+        education = st.selectbox("Education", ["Graduate", "Not Graduate"])
         dependents = st.selectbox("Number of Dependents", ["0", "1", "2", "3+"])
         
     with col2:
         st.subheader("Employment & Property")
+        # Keep the employment type mapping
+        employment_type = st.selectbox(
+            "Employment Type", 
+            ["Salaried", "Self Employed"],
+            help="Select 'Salaried' if you work for an employer, 'Self Employed' if you run your own business"
+        )
         
-        # FIX: Get actual Self_Employed options from the model
-        self_employed_options = list(label_encoders['Self_Employed'].classes_) if 'Self_Employed' in label_encoders else ["No", "Yes"]
-        
-        if len(self_employed_options) == 2 and set(self_employed_options) == {"No", "Yes"}:
-            # Use the mapping approach for better UX
-            employment_type = st.selectbox(
-                "Employment Type", 
-                ["Salaried", "Self Employed"],
-                help="Select 'Salaried' if you work for an employer, 'Self Employed' if you run your own business"
-            )
-            self_employed_value = "Yes" if employment_type == "Self Employed" else "No"
-        else:
-            # Use direct model options
-            self_employed_value = st.selectbox("Self Employed", self_employed_options)
+        # Map the user-friendly options to model-compatible values
+        self_employed_value = "Yes" if employment_type == "Self Employed" else "No"
         
         property_area = st.selectbox("Property Area", ["Urban", "Semiurban", "Rural"])
         credit_history = st.selectbox("Credit History", [1.0, 0.0], 
@@ -92,7 +76,7 @@ with st.form("loan_application"):
     submitted = st.form_submit_button("🚀 Predict Loan Approval", use_container_width=True)
 
 if submitted:
-    # Create input dataframe with EXACTLY the same columns as training
+    # Create input dataframe
     input_data = {
         'Gender': [gender],
         'Married': [married],
@@ -113,45 +97,38 @@ if submitted:
     with st.expander("📊 Input Data Summary"):
         st.write("**Your Application Details:**")
         st.dataframe(input_df, use_container_width=True)
+        st.write(f"**Employment Type:** {employment_type} → Self_Employed: {self_employed_value}")
         
     try:
-        # FIX: Ensure column order matches training data
-        expected_columns = list(label_encoders.keys()) + ['ApplicantIncome', 'CoapplicantIncome', 'LoanAmount', 'Loan_Amount_Term', 'Credit_History']
-        input_df = input_df[expected_columns]
+        # FIX: Get the correct feature names and enforce column order
+        if hasattr(scaler, 'feature_names_in_'):
+            # Use scaler's feature names (most accurate)
+            expected_columns = list(scaler.feature_names_in_)
+        else:
+            # Fallback: use label_encoders order + numerical columns
+            numerical_columns = ['ApplicantIncome', 'CoapplicantIncome', 'LoanAmount', 'Loan_Amount_Term', 'Credit_History']
+            expected_columns = list(label_encoders.keys()) + numerical_columns
+        
+        # Reorder input dataframe to match training data order
+        input_df_ordered = input_df[expected_columns].copy()
         
         # Preprocess input data using saved encoders
-        encoded_df = input_df.copy()
-        encoding_debug = {}
+        encoded_df = input_df_ordered.copy()
         
         for column in label_encoders:
             if column in encoded_df.columns:
                 original_value = encoded_df[column].iloc[0]
                 try:
                     encoded_df[column] = label_encoders[column].transform(encoded_df[column])
-                    encoding_debug[column] = {
-                        'original': original_value,
-                        'encoded': encoded_df[column].iloc[0],
-                        'mapping': dict(zip(label_encoders[column].classes_, range(len(label_encoders[column].classes_))))
-                    }
                 except ValueError as e:
                     st.error(f"❌ Encoding error for {column}: '{original_value}' not in {list(label_encoders[column].classes_)}")
                     st.stop()
         
-        # Display encoding debug info
-        with st.expander("🔍 Encoding Debug Info"):
-            st.write("**Encoding Transformations:**")
-            for col, debug_info in encoding_debug.items():
-                st.write(f"**{col}:** '{debug_info['original']}' → {debug_info['encoded']}")
-            st.write("**Full Encoding Mapping:**")
-            for col, debug_info in encoding_debug.items():
-                st.write(f"{col}: {debug_info['mapping']}")
-        
-        # Display final encoded data
-        with st.expander("🔍 Final Encoded Data"):
-            st.write("**Data sent to model:**")
+        # Display encoded data for debugging
+        with st.expander("🔍 Encoded Data (Debug)"):
+            st.write("**Encoded Values:**")
             st.dataframe(encoded_df, use_container_width=True)
-            st.write(f"**Data shape:** {encoded_df.shape}")
-            st.write(f"**Data types:** {encoded_df.dtypes.to_dict()}")
+            st.write("**Column Order:**", list(encoded_df.columns))
         
         # Scale features
         input_scaled = scaler.transform(encoded_df)
@@ -194,15 +171,14 @@ if submitted:
         st.dataframe(prob_df.style.format({'Probability': '{:.2%}'}).hide(axis='index'), 
                     use_container_width=True)
         
-        # Show feature importance if available
-        if hasattr(model, 'feature_importances_'):
-            st.subheader("📈 Feature Importance")
-            feature_importance = pd.DataFrame({
-                'Feature': encoded_df.columns,
-                'Importance': model.feature_importances_
-            }).sort_values('Importance', ascending=False)
-            
-            st.dataframe(feature_importance, use_container_width=True)
+        # Show feature importance
+        st.subheader("📈 Feature Importance")
+        feature_importance = pd.DataFrame({
+            'Feature': encoded_df.columns,
+            'Importance': model.feature_importances_
+        }).sort_values('Importance', ascending=False)
+        
+        st.dataframe(feature_importance, use_container_width=True)
         
         # Interpretation
         st.subheader("💡 Interpretation")
@@ -210,7 +186,7 @@ if submitted:
             st.info(f"""
             **Factors that likely contributed to approval:**
             - Good credit history
-            - {'Stable salaried employment' if self_employed_value == 'No' else 'Self-employed business'}
+            - {'Stable salaried employment' if employment_type == 'Salaried' else 'Self-employed business'}
             - Favorable property area
             - Strong financial profile
             """)
@@ -218,7 +194,7 @@ if submitted:
             st.info(f"""
             **Factors that may need improvement:**
             - Consider improving credit history
-            - {'Provide additional employment documentation' if self_employed_value == 'No' else 'Provide business financial statements'}
+            - {'Provide additional employment documentation' if employment_type == 'Salaried' else 'Provide business financial statements'}
             - Adjust loan amount relative to income
             - Increase income stability
             """)
@@ -226,35 +202,26 @@ if submitted:
     except Exception as e:
         st.error(f"❌ Error making prediction: {str(e)}")
         st.info("""
-        **Common Issues:**
-        - Input values don't match training data encodings
-        - Column order mismatch
-        - Data type inconsistencies
+        **Troubleshooting tips:**
+        - Make sure all fields are filled correctly
+        - The model only accepts specific values for each field
+        - Check that your inputs match the training data format
         """)
-        
-        # Additional debug info
-        with st.expander("🔧 Technical Debug Info"):
-            st.write(f"Error type: {type(e).__name__}")
-            st.write(f"Error message: {str(e)}")
-            st.write("**Input DataFrame:**")
-            st.write(input_df)
-            st.write("**Available encoders:**")
-            for col, encoder in label_encoders.items():
-                st.write(f"{col}: {list(encoder.classes_)}")
 
 # Add help section in sidebar
 with st.sidebar:
     st.markdown("---")
     st.markdown("### 💡 How to Use:")
     st.markdown("1. Fill all applicant details")
-    st.markdown("2. Select employment type")
-    st.markdown("3. Enter financial information") 
+    st.markdown("2. Select employment type: 'Salaried' or 'Self Employed'")
+    st.markdown("3. Enter financial information")
     st.markdown("4. Click 'Predict Loan Approval'")
-    st.markdown("5. Review results and debug info if needed")
+    st.markdown("5. Review results and insights")
     
     st.markdown("### 📊 Model Info:")
     st.markdown("- **Algorithm**: Random Forest")
+    st.markdown("- **Training Data**: 480 records")
     st.markdown("- **Features**: 11 variables")
     st.markdown("- **Accuracy**: 84.55%")
-
   
+
