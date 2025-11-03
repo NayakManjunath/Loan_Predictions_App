@@ -11,21 +11,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Load the trained model
-try:
-    with open("loan_prediction.pkl", "rb") as f:
-        model, scaler, label_encoders, target_encoder = pickle.load(f)
-    
-#     # Display debug info in sidebar
-#     with st.sidebar:
-#         st.success("✅ Model Loaded Successfully!")
-#         st.write("**Model Performance:**")
-#         st.metric("Accuracy", "84.55%")
-#         st.write("**Features:**", 11)
-        
-# except Exception as e:
-#     st.error(f"❌ Error loading model: {str(e)}")
-#     st.stop()
 
 st.title("🏦 Loan Approval Prediction App")
 st.markdown("Predict whether a loan application will be approved based on applicant information")
@@ -291,5 +276,6 @@ with st.sidebar:
     st.markdown("- **Confidence**: ≥70% required")
     st.markdown("- **Credit History**: Must be good")
     st.markdown("- **Final Decision**: Based on all criteria")
+
 
 
