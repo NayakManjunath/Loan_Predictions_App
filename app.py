@@ -20,7 +20,7 @@ try:
     if len(loaded_data) == 4:
         model, scaler, label_encoders, target_encoder = loaded_data
         st.sidebar.success("✅ Model Loaded Successfully!")
-    elif:
+    else:
         st.error(f"❌ Unexpected number of objects in pickle file: {len(loaded_data)}")
         st.stop()
     
@@ -359,5 +359,6 @@ with st.sidebar:
     st.markdown("- **Confidence**: ≥70% required")
     st.markdown("- **Credit History**: Must be good")
     st.markdown("- **Final Decision**: Based on all criteria")
+
 
 
