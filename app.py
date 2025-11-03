@@ -1,17 +1,18 @@
-# app.py 
+# app.py - ENHANCED VERSION with Complete 5Cs of Credit
 import streamlit as st
 import pickle
 import pandas as pd
 import numpy as np
+from datetime import datetime
 
 # Set page config
 st.set_page_config(
-    page_title="Loan Approval Predictor",
+    page_title="Advanced Loan Approval Predictor",
     page_icon="🏦",
     layout="wide"
 )
 
-# Load the trained model with better error handling
+# Load the trained model
 try:
     with open("loan_prediction.pkl", "rb") as f:
         loaded_data = pickle.load(f)
@@ -20,76 +21,138 @@ try:
     if len(loaded_data) == 4:
         model, scaler, label_encoders, target_encoder = loaded_data
         st.sidebar.success("✅ Model Loaded Successfully!")
+    elif len(loaded_data) == 3:
+        model, label_encoders, target_encoder = loaded_data
+        scaler = None
+        st.sidebar.warning("⚠️ Scaler not found in model file")
     else:
         st.error(f"❌ Unexpected number of objects in pickle file: {len(loaded_data)}")
         st.stop()
     
-#     # Display debug info in sidebar
-    with st.sidebar:
-        st.write("**Model Performance:**")
-        st.metric("Accuracy", "84.55%")
-        st.write("**Features:**", 11)
-        st.write("**Scaler Available:**", "Yes" if scaler is not None else "No")
-        
-        # Show available encoders
-        with st.expander("🔍 Model Info"):
-            st.write("**Available Encoders:**", list(label_encoders.keys()))
-            for col, encoder in label_encoders.items():
-                st.write(f"**{col}:** {list(encoder.classes_)}")
-        
 except Exception as e:
     st.error(f"❌ Error loading model: {str(e)}")
     st.stop()
 
-st.title("🏦 Loan Approval Prediction App")
-st.markdown("Predict whether a loan application will be approved based on applicant information")
+st.title("🏦 Advanced Loan Approval Prediction App")
+st.markdown("Comprehensive loan assessment based on the **5 Cs of Credit**: Character, Capacity, Capital, Collateral, Conditions")
 
-# Input form
+# Input form with ALL required criteria
 with st.form("loan_application"):
-    st.header("📋 Applicant Information")
+    st.header("📋 Applicant Information - 5 Cs of Credit")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Personal Details")
+        st.subheader("👤 Character & Personal Details")
         gender = st.selectbox("Gender", ["Male", "Female"])
         married = st.selectbox("Married", ["Yes", "No"])
+        
+        # Age input
+        age = st.number_input("Age", min_value=18, max_value=70, value=30, 
+                             help="Applicants typically between 21-60 years")
+        
         education = st.selectbox("Education", ["Graduate", "Not Graduate"])
         dependents = st.selectbox("Number of Dependents", ["0", "1", "2", "3+"])
         
     with col2:
-        st.subheader("Employment & Property")
+        st.subheader("💼 Employment & Stability")
         employment_type = st.selectbox(
             "Employment Type", 
             ["Salaried", "Self Employed"],
             help="Select 'Salaried' if you work for an employer, 'Self Employed' if you run your own business"
         )
         
-        # Map the user-friendly options to model-compatible values
+        # Employment stability
+        employment_years = st.number_input("Years with Current Employer", 
+                                         min_value=0.0, max_value=40.0, value=2.0, step=0.5,
+                                         help="Lenders prefer 1-2+ years stability")
+        
         self_employed_value = "Yes" if employment_type == "Self Employed" else "No"
         
         property_area = st.selectbox("Property Area", ["Urban", "Semiurban", "Rural"])
-        credit_history = st.selectbox("Credit History", [1.0, 0.0], 
-                                    format_func=lambda x: "Good" if x == 1.0 else "Bad")
     
-    st.header("💰 Financial Information")
+    st.header("💰 Financial Capacity & Capital")
     
     col3, col4 = st.columns(2)
     
     with col3:
-        st.subheader("Income Details")
-        applicant_income = st.number_input("Applicant Income ($)", min_value=0, value=5000, step=100)
-        coapplicant_income = st.number_input("Coapplicant Income ($)", min_value=0, value=0, step=100)
+        st.subheader("💵 Income Details")
+        applicant_income = st.number_input("Applicant Monthly Income ($)", 
+                                         min_value=0, value=5000, step=100,
+                                         help="Minimum typically $2,500+ depending on location")
+        coapplicant_income = st.number_input("Coapplicant Monthly Income ($)", 
+                                           min_value=0, value=0, step=100)
+        
+        # Existing debt obligations
+        existing_emi = st.number_input("Existing Monthly Debt Payments ($)", 
+                                     min_value=0, value=0, step=50,
+                                     help="Current loan EMIs, credit card payments")
         
     with col4:
-        st.subheader("Loan Details")
-        loan_amount = st.number_input("Loan Amount ($)", min_value=0, value=150, step=10)
-        loan_amount_term = st.number_input("Loan Term (months)", min_value=0, value=24, step=12)
+        st.subheader("🏠 Collateral & Assets")
+        loan_amount = st.number_input("Loan Amount Requested ($)", 
+                                    min_value=0, value=15000, step=100)
+        loan_amount_term = st.number_input("Loan Term (months)", 
+                                         min_value=12, max_value=360, value=60, step=12)
+        
+        # Collateral value
+        collateral_value = st.number_input("Collateral Value ($ - if any)", 
+                                         min_value=0, value=0, step=1000,
+                                         help="Property, vehicle, or other asset value")
+        
+        # Savings/Assets
+        total_savings = st.number_input("Total Savings & Investments ($)", 
+                                      min_value=0, value=5000, step=500,
+                                      help="Demonstrates financial discipline")
     
-    submitted = st.form_submit_button("🚀 Predict Loan Approval", use_container_width=True)
+    st.header("🔐 Credit History & Risk Assessment")
+    
+    col5, col6 = st.columns(2)
+    
+    with col5:
+        st.subheader("📊 Credit Profile")
+        # Detailed credit score instead of just Good/Bad
+        credit_score = st.slider("Credit Score", 
+                               min_value=300, max_value=850, value=750, step=10,
+                               help="Excellent: 750+, Good: 650-749, Poor: <650")
+        
+        # Map credit score to the model's expected format
+        if credit_score >= 650:
+            credit_history = 1.0  # Good
+            credit_category = "Good"
+        else:
+            credit_history = 0.0  # Bad  
+            credit_category = "Poor"
+            
+        st.write(f"**Credit Category:** {credit_category}")
+        
+    with col6:
+        st.subheader("📈 Risk Indicators")
+        # Calculate Debt-to-Income Ratio
+        total_income = applicant_income + coapplicant_income
+        if total_income > 0:
+            dti_ratio = (existing_emi / total_income) * 100
+        else:
+            dti_ratio = 0
+            
+        st.metric("Debt-to-Income Ratio", f"{dti_ratio:.1f}%")
+        
+        # DTI assessment
+        if dti_ratio <= 36:
+            dti_status = "✅ Excellent"
+        elif dti_ratio <= 40:
+            dti_status = "⚠️ Acceptable"
+        elif dti_ratio <= 50:
+            dti_status = "⚠️ High"
+        else:
+            dti_status = "❌ Very High"
+            
+        st.write(f"**DTI Status:** {dti_status}")
+    
+    submitted = st.form_submit_button("🚀 Comprehensive Loan Assessment", use_container_width=True)
 
 if submitted:
-    # Create input dataframe
+    # Create input dataframe for ML model (maintaining compatibility)
     input_data = {
         'Gender': [gender],
         'Married': [married],
@@ -100,265 +163,264 @@ if submitted:
         'CoapplicantIncome': [coapplicant_income],
         'LoanAmount': [loan_amount],
         'Loan_Amount_Term': [loan_amount_term],
-        'Credit_History': [credit_history],
+        'Credit_History': [credit_history],  # Using mapped value
         'Property_Area': [property_area]
     }
     
     input_df = pd.DataFrame(input_data)
     
-    # Display the raw input
-    with st.expander("📊 Input Data Summary"):
-        st.write("**Your Application Details:**")
-        st.dataframe(input_df, use_container_width=True)
-        st.write(f"**Employment Type:** {employment_type} → Self_Employed: {self_employed_value}")
-        
+    # Display comprehensive assessment
+    st.header("🎯 Comprehensive Loan Assessment Results")
+    
     try:
-        # FIX 1: Get the EXACT column order from the model or scaler
-        if scaler is not None and hasattr(scaler, 'feature_names_in_'):
-            # Best option: get column order from scaler
-            expected_columns = list(scaler.feature_names_in_)
-            st.sidebar.info(f"📋 Using scaler feature order")
-        elif hasattr(model, 'feature_names_in_'):
-            # Alternative: get from model
-            expected_columns = list(model.feature_names_in_)
-            st.sidebar.info(f"📋 Using model feature order")
-        else:
-            # Fallback: reconstruct order from encoders + numerical columns
-            numerical_columns = ['ApplicantIncome', 'CoapplicantIncome', 'LoanAmount', 'Loan_Amount_Term', 'Credit_History']
-            categorical_columns = list(label_encoders.keys())
-            expected_columns = categorical_columns + numerical_columns
-            st.sidebar.warning("⚠️ Reconstructed column order")
+        # Get column order and preprocess for ML model
+        numerical_columns = ['ApplicantIncome', 'CoapplicantIncome', 'LoanAmount', 'Loan_Amount_Term', 'Credit_History']
+        categorical_columns = list(label_encoders.keys())
+        expected_columns = categorical_columns + numerical_columns
         
-        st.sidebar.write(f"**Expected columns:** {expected_columns}")
-        
-        # FIX 2: Check for missing or extra columns
-        missing_columns = [col for col in expected_columns if col not in input_df.columns]
-        extra_columns = [col for col in input_df.columns if col not in expected_columns]
-        
-        if missing_columns:
-            st.error(f"❌ Missing columns: {missing_columns}")
-            st.stop()
-        if extra_columns:
-            st.warning(f"⚠️ Extra columns (will be removed): {extra_columns}")
-        
-        # FIX 3: Reorder columns to EXACTLY match training order
+        # Reorder input dataframe
         input_df_ordered = input_df[expected_columns].copy()
         
-        # Display column order info
-        with st.expander("🔍 Column Order Debug"):
-            st.write("**Input DataFrame Columns:**", list(input_df.columns))
-            st.write("**Expected Columns:**", expected_columns)
-            st.write("**Final Ordered Columns:**", list(input_df_ordered.columns))
-        
-        # Preprocess input data using saved encoders
+        # Preprocess input data
         encoded_df = input_df_ordered.copy()
-        encoding_info = {}
-        
         for column in label_encoders:
             if column in encoded_df.columns:
-                original_value = encoded_df[column].iloc[0]
-                try:
-                    encoded_value = label_encoders[column].transform([original_value])[0]
-                    encoded_df[column] = encoded_value
-                    encoding_info[column] = {
-                        'original': original_value,
-                        'encoded': encoded_value,
-                        'mapping': dict(zip(label_encoders[column].classes_, 
-                                          label_encoders[column].transform(label_encoders[column].classes_)))
-                    }
-                except ValueError as e:
-                    st.error(f"❌ Encoding error for {column}: '{original_value}' not in {list(label_encoders[column].classes_)}")
-                    st.stop()
+                encoded_df[column] = label_encoders[column].transform(encoded_df[column])
         
-        # Display encoding info
-        with st.expander("🔍 Encoding Information"):
-            st.write("**Encoding Transformations:**")
-            for col, info in encoding_info.items():
-                st.write(f"**{col}:** '{info['original']}' → {info['encoded']}")
-        
-        # Scale features if scaler is available
+        # Scale features if scaler available
         if scaler is not None:
             input_scaled = scaler.transform(encoded_df)
         else:
-            # If no scaler, use the encoded data directly
             input_scaled = encoded_df.values
-            st.warning("⚠️ Using unscaled features (scaler not available)")
         
-        # Make prediction
+        # ML Model Prediction
         prediction = model.predict(input_scaled)
         prediction_proba = model.predict_proba(input_scaled)
-        
-        # Convert prediction back to original label
         result = target_encoder.inverse_transform(prediction)
-        probability = prediction_proba[0][prediction[0]]
+        ml_confidence = prediction_proba[0][prediction[0]]
         
-        # Apply business rules
-        final_decision = result[0]
-        confidence_threshold = 0.70  # 70% confidence threshold
-        credit_history_bad = credit_history == 0.0
+        # ENHANCED: Comprehensive Risk Scoring System
+        risk_score = 0
+        approval_factors = []
+        rejection_factors = []
         
-        # Rule 1: Reject if confidence level is below 70%
-        if probability < confidence_threshold:
-            final_decision = 'N'
-            rejection_reason = f"Confidence level ({probability:.2%}) below required threshold ({confidence_threshold:.0%})"
-        
-        # Rule 2: Reject if confidence above 70% but credit history is bad
-        elif probability >= confidence_threshold and credit_history_bad:
-            final_decision = 'N'
-            rejection_reason = "Credit history is poor despite high confidence"
-        
+        # 1. Credit Score Assessment (Character - 30% weight)
+        if credit_score >= 750:
+            risk_score += 30
+            approval_factors.append("Excellent credit score (750+)")
+        elif credit_score >= 650:
+            risk_score += 20
+            approval_factors.append("Good credit score (650-749)")
         else:
-            rejection_reason = None
+            risk_score += 5
+            rejection_factors.append("Poor credit score (<650)")
         
-        # Display results
-        st.header("🎯 Prediction Results")
+        # 2. Income Stability (Capacity - 25% weight)
+        total_monthly_income = applicant_income + coapplicant_income
+        if total_monthly_income >= 2500:  # Minimum threshold
+            risk_score += 15
+            approval_factors.append("Sufficient monthly income")
+        else:
+            risk_score += 5
+            rejection_factors.append("Insufficient monthly income")
         
-        result_col, prob_col = st.columns(2)
+        if employment_years >= 2:
+            risk_score += 10
+            approval_factors.append("Stable employment history (2+ years)")
+        elif employment_years >= 1:
+            risk_score += 7
+            approval_factors.append("Moderate employment stability (1-2 years)")
+        else:
+            risk_score += 3
+            rejection_factors.append("Limited employment history (<1 year)")
         
-        with result_col:
-            if final_decision == 'Y':
-                st.success(f"## ✅ Loan Approved!")
-                st.balloons()
-            else:
-                st.error(f"## ❌ Loan Not Approved")
-                if rejection_reason:
-                    st.warning(f"**Reason:** {rejection_reason}")
+        # 3. Debt-to-Income Ratio (Capacity - 20% weight)
+        if dti_ratio <= 36:
+            risk_score += 20
+            approval_factors.append("Excellent debt-to-income ratio (<36%)")
+        elif dti_ratio <= 40:
+            risk_score += 15
+            approval_factors.append("Acceptable debt-to-income ratio (36-40%)")
+        elif dti_ratio <= 50:
+            risk_score += 8
+            rejection_factors.append("High debt-to-income ratio (40-50%)")
+        else:
+            risk_score += 0
+            rejection_factors.append("Very high debt-to-income ratio (>50%)")
         
-        with prob_col:
-            confidence_level = "High" if probability > 0.7 else "Medium" if probability > 0.5 else "Low"
-            status_color = "normal"
+        # 4. Collateral & Assets (Collateral/Capital - 15% weight)
+        if collateral_value >= loan_amount * 0.8:  # 80% collateral coverage
+            risk_score += 15
+            approval_factors.append("Strong collateral coverage")
+        elif collateral_value >= loan_amount * 0.5:
+            risk_score += 10
+            approval_factors.append("Adequate collateral")
+        else:
+            risk_score += 5
+            if loan_amount > 10000:  # Only mention for larger loans
+                rejection_factors.append("Limited collateral for loan amount")
+        
+        if total_savings >= loan_amount * 0.2:
+            risk_score += 5
+            approval_factors.append("Strong personal capital/savings")
+        
+        # 5. Age & Conditions (Conditions - 10% weight)
+        if 25 <= age <= 55:
+            risk_score += 10
+            approval_factors.append("Ideal age for loan tenure")
+        elif 21 <= age <= 60:
+            risk_score += 7
+            approval_factors.append("Acceptable age range")
+        else:
+            risk_score += 3
+            rejection_factors.append("Age outside preferred range")
+        
+        # FINAL DECISION with Enhanced Rules
+        final_confidence = (ml_confidence + (risk_score / 100)) / 2
+        confidence_threshold = 0.70
+        
+        # Enhanced decision rules
+        if risk_score >= 70 and final_confidence >= confidence_threshold:
+            final_decision = 'Y'
+            decision_confidence = "High"
+        elif risk_score >= 60 and final_confidence >= confidence_threshold * 0.9:
+            final_decision = 'Y' 
+            decision_confidence = "Moderate"
+        else:
+            final_decision = 'N'
+            decision_confidence = "Low"
+        
+        # Override: Automatic rejections
+        if credit_score < 600:
+            final_decision = 'N'
+            rejection_factors.append("Very poor credit score (automatic rejection)")
+        if dti_ratio > 60:
+            final_decision = 'N'
+            rejection_factors.append("Extremely high debt-to-income ratio (automatic rejection)")
+        if age < 21 or age > 65:
+            final_decision = 'N'
+            rejection_factors.append("Age outside lending criteria")
+        
+        # Display Results
+        st.subheader("📊 Risk Assessment Score")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Comprehensive Risk Score", f"{risk_score}/100")
+        
+        with col2:
+            st.metric("ML Model Confidence", f"{ml_confidence:.2%}")
+        
+        with col3:
+            st.metric("Final Confidence", f"{final_confidence:.2%}")
+        
+        # Final Decision
+        st.subheader("🎯 Final Decision")
+        
+        if final_decision == 'Y':
+            st.success(f"## ✅ LOAN APPROVED - {decision_confidence} Confidence")
+            st.balloons()
             
-            # Color code based on final decision
-            if final_decision == 'Y':
-                status_color = "normal"
-            else:
-                if probability < confidence_threshold:
-                    status_color = "off"
-                else:
-                    status_color = "inverse"
+            st.info("### ✅ Approval Factors:")
+            for factor in approval_factors:
+                st.write(f"• {factor}")
+                
+        else:
+            st.error(f"## ❌ LOAN NOT APPROVED - {decision_confidence} Confidence")
             
-            st.metric(
-                label="Confidence Level",
-                value=f"{probability:.2%}",
-                delta=confidence_level,
-                delta_color=status_color
-            )
+            if rejection_factors:
+                st.warning("### ❌ Primary Concerns:")
+                for factor in rejection_factors:
+                    st.write(f"• {factor}")
+            
+            if approval_factors:
+                st.info("### ✅ Positive Factors:")
+                for factor in approval_factors:
+                    st.write(f"• {factor}")
         
-        # Show detailed probabilities
-        st.subheader("Detailed Probabilities")
-        prob_df = pd.DataFrame({
-            'Class': target_encoder.classes_,
-            'Probability': prediction_proba[0],
-            'Description': ['Loan Rejected', 'Loan Approved']
-        })
-        st.dataframe(prob_df.style.format({'Probability': '{:.2%}'}).hide(axis='index'), 
-                    use_container_width=True)
+        # Detailed Breakdown
+        st.subheader("📈 Detailed Assessment Breakdown")
         
-        # Show business rules applied
-        st.subheader("📋 Business Rules Applied")
-        rules_df = pd.DataFrame({
-            'Rule': [
-                'Confidence Threshold (70%)',
-                'Credit History Check',
-                'Final Decision'
+        assessment_data = {
+            'Criteria': [
+                'Credit Score (Character)',
+                'Income & Employment (Capacity)', 
+                'Debt-to-Income Ratio (Capacity)',
+                'Collateral & Assets (Collateral/Capital)',
+                'Age & Conditions (Conditions)',
+                'ML Model Prediction'
+            ],
+            'Score': [30, 25, 20, 20, 10, 'N/A'],
+            'Your Score': [
+                f"{min(30, max(5, (credit_score-300)//15))}/30",
+                f"{min(25, 15 + min(10, employment_years*5))}/25", 
+                f"{min(20, max(0, 20 - max(0, dti_ratio-36)//2))}/20",
+                f"{min(20, 5 + min(15, collateral_value//1000))}/20",
+                f"{min(10, max(3, 10 - abs(age-40)//10))}/10",
+                f"{ml_confidence:.2%}"
             ],
             'Status': [
-                f"{'✅ Met' if probability >= confidence_threshold else '❌ Not Met'} ({probability:.2%})",
-                f"{'✅ Good' if not credit_history_bad else '❌ Poor'}",
-                f"{'✅ Approved' if final_decision == 'Y' else '❌ Rejected'}"
-            ],
-            'Description': [
-                f"Model confidence must be ≥ {confidence_threshold:.0%}",
-                "Credit history must be good for approval",
-                "Based on all rules and model prediction"
+                "Excellent" if credit_score >= 750 else "Good" if credit_score >= 650 else "Poor",
+                "Stable" if employment_years >= 2 else "Moderate" if employment_years >= 1 else "Limited",
+                "Excellent" if dti_ratio <= 36 else "Good" if dti_ratio <= 40 else "High" if dti_ratio <= 50 else "Very High",
+                "Strong" if collateral_value >= loan_amount*0.8 else "Adequate" if collateral_value >= loan_amount*0.5 else "Limited",
+                "Ideal" if 25 <= age <= 55 else "Acceptable" if 21 <= age <= 60 else "Outside Range",
+                "High" if ml_confidence >= 0.7 else "Moderate" if ml_confidence >= 0.5 else "Low"
             ]
-        })
-        st.dataframe(rules_df, use_container_width=True)
+        }
         
-        # Show feature importance
-        if hasattr(model, 'feature_importances_'):
-            st.subheader("📈 Feature Importance")
-            feature_importance = pd.DataFrame({
-                'Feature': encoded_df.columns,
-                'Importance': model.feature_importances_
-            }).sort_values('Importance', ascending=False)
-            
-            st.dataframe(feature_importance, use_container_width=True)
+        assessment_df = pd.DataFrame(assessment_data)
+        st.dataframe(assessment_df, use_container_width=True)
         
-        # Interpretation
-        st.subheader("💡 Interpretation")
+        # Recommendations
+        st.subheader("💡 Recommendations & Next Steps")
+        
         if final_decision == 'Y':
-            st.info(f"""
-            **Factors that contributed to approval:**
-            - Good credit history
-            - {'Stable salaried employment' if employment_type == 'Salaried' else 'Self-employed business'}
-            - Favorable property area
-            - Strong financial profile
-            - High confidence level ({probability:.2%})
+            st.success("""
+            **Next Steps for Approval:**
+            • Submit required documentation (income proof, identity, address)
+            • Complete KYC verification
+            • Review and accept loan terms
+            • Funds will be disbursed within 3-5 business days
             """)
         else:
-            if probability < confidence_threshold:
-                st.info(f"""
-                **Reasons for rejection:**
-                - Confidence level ({probability:.2%}) below required threshold ({confidence_threshold:.0%})
-                - Model prediction is not sufficiently certain
-                - Consider providing additional documentation
-                """)
-            elif credit_history_bad:
-                st.info(f"""
-                **Reasons for rejection:**
-                - Poor credit history (automatic rejection)
-                - Despite high model confidence ({probability:.2%})
-                - Improve credit score before reapplying
-                """)
-            else:
-                st.info(f"""
-                **Factors that may need improvement:**
-                - Consider improving credit history
-                - {'Provide additional employment documentation' if employment_type == 'Salaried' else 'Provide business financial statements'}
-                - Adjust loan amount relative to income
-                - Increase income stability
-                """)
+            st.info("""
+            **Suggestions for Improvement:**
+            • Improve credit score by paying existing debts on time
+            • Reduce debt-to-income ratio by paying down existing loans
+            • Maintain stable employment for 6-12 months
+            • Consider adding a co-applicant with good credit
+            • Provide additional collateral if available
+            • Reapply after addressing these factors
+            """)
             
     except Exception as e:
-        st.error(f"❌ Error making prediction: {str(e)}")
-        
-        # Enhanced debugging information
-        with st.expander("🔧 Technical Debug Information"):
-            st.write(f"**Error type:** {type(e).__name__}")
-            st.write(f"**Error message:** {str(e)}")
-            
-            # Show what we have available
-            st.write("**Available objects:**")
-            st.write(f"- Model: {type(model)}")
-            st.write(f"- Scaler: {type(scaler) if scaler else 'None'}")
-            st.write(f"- Label Encoders: {list(label_encoders.keys())}")
-            
-            if 'input_df_ordered' in locals():
-                st.write("**Input DataFrame Columns:**", list(input_df_ordered.columns))
-            if 'expected_columns' in locals():
-                st.write("**Expected Columns:**", expected_columns)
+        st.error(f"❌ Error in assessment: {str(e)}")
 
-# Add help section in sidebar
+# Enhanced sidebar information
 with st.sidebar:
     st.markdown("---")
-    st.markdown("### 💡 How to Use:")
-    st.markdown("1. Fill all applicant details")
-    st.markdown("2. Select employment type: 'Salaried' or 'Self Employed'")
-    st.markdown("3. Enter financial information")
-    st.markdown("4. Click 'Predict Loan Approval'")
-    st.markdown("5. Review results and insights")
+    st.markdown("### 📋 5 Cs of Credit Assessment")
+    st.markdown("""
+    **Character** - Credit history & score
+    **Capacity** - Income stability & DTI ratio  
+    **Capital** - Savings & net worth
+    **Collateral** - Asset security
+    **Conditions** - Age, loan purpose, terms
+    """)
     
-    st.markdown("### 📊 Model Info:")
-    st.markdown("- **Algorithm**: Random Forest")
-    st.markdown("- **Training Data**: 480 records")
-    st.markdown("- **Features**: 11 variables")
-    st.markdown("- **Accuracy**: 84.55%")
+    st.markdown("### 🎯 Approval Guidelines")
+    st.markdown("""
+    **Excellent**: 750+ credit, <36% DTI, 2+ years employment
+    **Good**: 650-749 credit, <40% DTI, 1+ year employment  
+    **Poor**: <650 credit, >50% DTI, unstable income
+    """)
     
-    st.markdown("### 🛡️ Business Rules:")
-    st.markdown("- **Confidence**: ≥70% required")
-    st.markdown("- **Credit History**: Must be good")
-    st.markdown("- **Final Decision**: Based on all criteria")
-
-
-
+    st.markdown("### ⚠️ Automatic Rejections")
+    st.markdown("""
+    • Credit score < 600
+    • DTI ratio > 60%
+    • Age < 21 or > 65
+    • Insufficient income
+    """)
