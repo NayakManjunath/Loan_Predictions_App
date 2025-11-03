@@ -35,6 +35,12 @@ try:
         st.write("**Features:**", 11)
         st.write("**Scaler Available:**", "Yes" if scaler is not None else "No")
         
+        # Show available encoders
+        with st.expander("🔍 Model Info"):
+            st.write("**Available Encoders:**", list(label_encoders.keys()))
+            for col, encoder in label_encoders.items():
+                st.write(f"**{col}:** {list(encoder.classes_)}")
+        
 except Exception as e:
     st.error(f"❌ Error loading model: {str(e)}")
     st.stop()
@@ -111,30 +117,74 @@ if submitted:
         st.write(f"**Employment Type:** {employment_type} → Self_Employed: {self_employed_value}")
         
     try:
-        # Determine expected columns
-        numerical_columns = ['ApplicantIncome', 'CoapplicantIncome', 'LoanAmount', 'Loan_Amount_Term', 'Credit_History']
-        expected_columns = list(label_encoders.keys()) + numerical_columns
+        # FIX 1: Get the EXACT column order from the model or scaler
+        if scaler is not None and hasattr(scaler, 'feature_names_in_'):
+            # Best option: get column order from scaler
+            expected_columns = list(scaler.feature_names_in_)
+            st.sidebar.info(f"📋 Using scaler feature order")
+        elif hasattr(model, 'feature_names_in_'):
+            # Alternative: get from model
+            expected_columns = list(model.feature_names_in_)
+            st.sidebar.info(f"📋 Using model feature order")
+        else:
+            # Fallback: reconstruct order from encoders + numerical columns
+            numerical_columns = ['ApplicantIncome', 'CoapplicantIncome', 'LoanAmount', 'Loan_Amount_Term', 'Credit_History']
+            categorical_columns = list(label_encoders.keys())
+            expected_columns = categorical_columns + numerical_columns
+            st.sidebar.warning("⚠️ Reconstructed column order")
         
-        # Reorder input dataframe to match training data order
+        st.sidebar.write(f"**Expected columns:** {expected_columns}")
+        
+        # FIX 2: Check for missing or extra columns
+        missing_columns = [col for col in expected_columns if col not in input_df.columns]
+        extra_columns = [col for col in input_df.columns if col not in expected_columns]
+        
+        if missing_columns:
+            st.error(f"❌ Missing columns: {missing_columns}")
+            st.stop()
+        if extra_columns:
+            st.warning(f"⚠️ Extra columns (will be removed): {extra_columns}")
+        
+        # FIX 3: Reorder columns to EXACTLY match training order
         input_df_ordered = input_df[expected_columns].copy()
+        
+        # Display column order info
+        with st.expander("🔍 Column Order Debug"):
+            st.write("**Input DataFrame Columns:**", list(input_df.columns))
+            st.write("**Expected Columns:**", expected_columns)
+            st.write("**Final Ordered Columns:**", list(input_df_ordered.columns))
         
         # Preprocess input data using saved encoders
         encoded_df = input_df_ordered.copy()
+        encoding_info = {}
         
         for column in label_encoders:
             if column in encoded_df.columns:
                 original_value = encoded_df[column].iloc[0]
                 try:
-                    encoded_df[column] = label_encoders[column].transform(encoded_df[column])
+                    encoded_value = label_encoders[column].transform([original_value])[0]
+                    encoded_df[column] = encoded_value
+                    encoding_info[column] = {
+                        'original': original_value,
+                        'encoded': encoded_value,
+                        'mapping': dict(zip(label_encoders[column].classes_, 
+                                          label_encoders[column].transform(label_encoders[column].classes_)))
+                    }
                 except ValueError as e:
                     st.error(f"❌ Encoding error for {column}: '{original_value}' not in {list(label_encoders[column].classes_)}")
                     st.stop()
+        
+        # Display encoding info
+        with st.expander("🔍 Encoding Information"):
+            st.write("**Encoding Transformations:**")
+            for col, info in encoding_info.items():
+                st.write(f"**{col}:** '{info['original']}' → {info['encoded']}")
         
         # Scale features if scaler is available
         if scaler is not None:
             input_scaled = scaler.transform(encoded_df)
         else:
-            # If no scaler, use the encoded data directly (with warning)
+            # If no scaler, use the encoded data directly
             input_scaled = encoded_df.values
             st.warning("⚠️ Using unscaled features (scaler not available)")
         
@@ -278,16 +328,20 @@ if submitted:
         st.error(f"❌ Error making prediction: {str(e)}")
         
         # Enhanced debugging information
-        with st.expander("🔧 Debug Information"):
-            st.write("**Available objects:**")
-            st.write(f"- Model: {type(model) if 'model' in locals() else 'Not defined'}")
-            st.write(f"- Scaler: {type(scaler) if 'scaler' in locals() else 'Not defined'}")
-            st.write(f"- Label Encoders: {list(label_encoders.keys()) if 'label_encoders' in locals() else 'Not defined'}")
-            st.write(f"- Target Encoder: {type(target_encoder) if 'target_encoder' in locals() else 'Not defined'}")
+        with st.expander("🔧 Technical Debug Information"):
+            st.write(f"**Error type:** {type(e).__name__}")
+            st.write(f"**Error message:** {str(e)}")
             
-            if 'encoded_df' in locals():
-                st.write("**Encoded DataFrame:**")
-                st.dataframe(encoded_df)
+            # Show what we have available
+            st.write("**Available objects:**")
+            st.write(f"- Model: {type(model)}")
+            st.write(f"- Scaler: {type(scaler) if scaler else 'None'}")
+            st.write(f"- Label Encoders: {list(label_encoders.keys())}")
+            
+            if 'input_df_ordered' in locals():
+                st.write("**Input DataFrame Columns:**", list(input_df_ordered.columns))
+            if 'expected_columns' in locals():
+                st.write("**Expected Columns:**", expected_columns)
 
 # Add help section in sidebar
 with st.sidebar:
@@ -309,5 +363,3 @@ with st.sidebar:
     st.markdown("- **Confidence**: ≥70% required")
     st.markdown("- **Credit History**: Must be good")
     st.markdown("- **Final Decision**: Based on all criteria")
-
-
